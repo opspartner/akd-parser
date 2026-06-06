@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "akd-parser"
+version = "0.1.0"
+description = "Local-first AKD extraction: PDF → vision LLM → validated AKD JSON (SVV schema)"
+requires-python = ">=3.12"
+license = "MIT"
+keywords = ["akd", "svv", "insurance", "extraction", "pdf", "ktg", "uvg"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+
+[project.urls]
+Homepage = "https://github.com/opspartner/akd-parser"
+Repository = "https://github.com/opspartner/akd-parser"
+
+dependencies = [
+    # Schema & validation
+    "pydantic>=2.10",
+    # CLI
+    "typer>=0.15",
+    # LLM (OpenAI-compatible: Ollama, vLLM, LM Studio, llama.cpp, …)
+    "openai>=1.60",
+    # PDF-to-image conversion
+    "pymupdf>=1.25",
+    # Image processing
+    "pillow>=11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.9",
+    "mypy>=1.14",
+]
+
+[project.scripts]
+akd-parser = "akd_parser.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["akd_parser"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["akd_parser"]
+
+[tool.pyrefly]
+project-includes = ["akd_parser"]
+python-version = "3.12.0"
+preset = "legacy"
