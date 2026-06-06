@@ -17,10 +17,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 
-[project.urls]
-Homepage = "https://github.com/opspartner/akd-parser"
-Repository = "https://github.com/opspartner/akd-parser"
-
 dependencies = [
     # Schema & validation
     "pydantic>=2.10",
@@ -33,6 +29,10 @@ dependencies = [
     # Image processing
     "pillow>=11.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/opspartner/akd-parser"
+Repository = "https://github.com/opspartner/akd-parser"
 
 [project.optional-dependencies]
 dev = [
