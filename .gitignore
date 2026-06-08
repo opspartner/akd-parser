@@ -223,3 +223,6 @@ __marimo__/
 *.csv
 *.error.json
 *.warnings.json
+.DS_Store
+/input/
+/output/
