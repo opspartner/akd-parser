@@ -224,5 +224,6 @@ __marimo__/
 *.error.json
 *.warnings.json
 .DS_Store
-/input/
-/output/
+/input*/
+/output*/
+/plan/
