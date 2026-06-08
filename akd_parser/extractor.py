@@ -25,7 +25,7 @@ Wichtige Grundregeln:
 2. Gib keine Erklärungen, keine Kommentare, kein Markdown und keinen Fliesstext zurück.
 3. Erfinde niemals Werte.
 4. Übernimm nur Daten, die visuell im Bild erkennbar sind oder sich eindeutig aus sichtbaren Formularzusammenhängen ableiten lassen.
-5. Wenn ein optionales oder branchenspezifisches Feld nicht sichtbar, leer, verdeckt, abgeschnitten, unleserlich oder nicht anwendbar ist, setze es auf null, sofern das Schema null erlaubt. Andernfalls lasse es weg, wenn das Schema dies erlaubt.
+5. Gib immer alle im JSON Schema definierten Felder aus; lasse niemals ein Feld weg. Wenn ein optionales oder branchenspezifisches Feld nicht sichtbar, leer, verdeckt, abgeschnitten, unleserlich oder nicht anwendbar ist, setze es auf null. Nur POLICE_NR muss immer einen Wert haben.
 6. Wenn für eine Recordart keine Daten gefunden werden, gib dafür ein leeres Array zurück.
 7. Halte dich strikt an die Feldnamen, Datentypen, Enum-Werte und Strukturen des JSON Schema.
 8. Bewahre offizielle AKD-Feldnamen exakt bei, insbesondere Grossschreibung und Unterstriche, z. B. POLICE_NR, KRS_LFNR, SICHT_DT.
@@ -77,7 +77,8 @@ Formular- und Tabellenlogik:
 
 Checkboxen und Auswahlfelder:
 - Eine sichtbar angekreuzte, markierte, ausgewählte oder aktivierte Option bedeutet 1.
-- Eine sichtbar nicht angekreuzte oder ausdrücklich verneinte Option bedeutet 0.
+- Die Regel "nicht angekreuzt → 0" gilt nur für reine Präsenz-Flags, also Felder, bei denen 0 schlicht "nicht vorhanden / nicht versichert" bedeutet (alle *_FL-Felder sowie KZ_OBL und KZ_FRW): sichtbar nicht angekreuzt oder ausdrücklich verneint → 0.
+- Bei codierten Auswahlfeldern, bei denen 0 eine eigene inhaltliche Bedeutung hat (z. B. GEKUENDIGT_DURCHWEN, KZ_EREIG_FINANZ, SUM_SCH, FRW_OBL, KTG_DECKUNGSART, KREISART_CD), bedeutet ein leeres oder nicht ausgefülltes Feld null, niemals 0. Setze hier nur dann 0, wenn die zugehörige Option sichtbar ausgewählt ist.
 - Wenn eine Checkbox undeutlich, beschädigt oder nicht sicher interpretierbar ist, setze das Feld auf null.
 - Wenn mehrere gegenseitig ausschliessende Optionen markiert sind und der Konflikt nicht auflösbar ist, setze das betroffene Feld auf null.
 - Beachte, dass Kreuze, Häkchen, gefüllte Kästchen, markierte Radiobuttons oder handschriftliche Markierungen als Auswahl gelten können.
@@ -105,7 +106,8 @@ Zahlen- und Währungsnormalisierung:
 - Kommas oder Punkte in Dezimalzahlen normalisieren:
   - "1,5" → 1.5
   - "0.5" → 0.5
-- Runde nicht selbst, ausser der sichtbare Formularwert ist bereits gerundet.
+- Geldbeträge in CHF auf ganze Franken runden (Rappen weglassen), da alle CHF-Felder im Schema ganzzahlig sind, z. B. "11'930.40" → 11930, "29'474.61" → 29475.
+- Andere Zahlen nicht selbst runden, ausser der sichtbare Formularwert ist bereits gerundet.
 - Negative Beträge nur übernehmen, wenn sie im Bild ausdrücklich negativ angegeben sind.
 
 Boolesche AKD-Werte:
@@ -144,12 +146,14 @@ Regeln:
 - KZ_EREIG_FINANZ:
   - Ereignissicht → 1
   - Finanzsicht → 0
+  - nicht eindeutig erkennbar → null
 - GEKUENDIGT:
   - Vertrag gekündigt → 1
   - Vertrag nicht gekündigt → 0
 - GEKUENDIGT_DURCHWEN:
   - Kündigung durch Kunde → 1
   - Kündigung durch Versicherer → 0
+  - nicht angegeben oder nicht erkennbar → null (niemals 0 als Standardwert)
 
 Recordart 20 — Kreis:
 Extrahiere pro Police und Deckungskreis einen Record mit RECORDART = 20.
@@ -186,6 +190,9 @@ Regeln:
 - Wartefristen in Tagen als INT übernehmen.
 - Faktoren wie 0.5, 1.5, 2.5 als FLOAT übernehmen.
 - Progressionen wie 100%, 225%, 350% als INT 100, 225, 350 übernehmen.
+- INV_LA (Leistungsart Invaliditätskapital):
+  - als Faktor des Jahreslohns → 1
+  - in CHF → 2
 - HK_KL:
   - privat / 1. Klasse → 1
   - halbprivat / 2. Klasse → 2
@@ -282,7 +289,7 @@ Prüfe vor der finalen JSON-Ausgabe:
 4. Stimmen die Datentypen mit dem JSON Schema überein?
 5. Sind Datumsfelder im Format dd.mm.yyyy?
 6. Sind AKD-BOOL-Felder als 0/1 und nicht als true/false ausgegeben?
-7. Sind fehlende optionale, unleserliche oder nicht anwendbare Werte als null gesetzt oder schema-konform weggelassen?
+7. Sind alle Schema-Felder vorhanden und fehlende, unleserliche oder nicht anwendbare Werte als null gesetzt (kein Feld weggelassen)?
 8. Wurden alle gelieferten Bilder berücksichtigt?
 9. Enthält die Antwort ausschliesslich JSON?
 

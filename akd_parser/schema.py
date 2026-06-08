@@ -2,11 +2,42 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 Bool01 = Literal[0, 1]
+
+
+def _normalize_ch_date(v: object) -> object:
+    """Normalisiere gängige Datumsformate auf 'dd.mm.yyyy'.
+
+    Akzeptiert dd.mm.yyyy, yyyy-mm-dd (ISO), dd/mm/yyyy und ein- bis
+    zweistellige Tag-/Monatsangaben. Unlesbare oder unbekannte Werte werden
+    zu None, damit ein einzelnes Feld nicht den ganzen Record sprengt.
+    """
+    if v is None:
+        return None
+    s = (v if isinstance(v, str) else str(v)).strip()
+    if not s:
+        return None
+    m = re.fullmatch(r"(\d{1,2})\.(\d{1,2})\.(\d{4})", s)
+    if m:
+        d, mo, y = m.groups()
+        return f"{int(d):02d}.{int(mo):02d}.{y}"
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        y, mo, d = m.groups()
+        return f"{int(d):02d}.{int(mo):02d}.{y}"
+    m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})", s)
+    if m:
+        d, mo, y = m.groups()
+        return f"{int(d):02d}.{int(mo):02d}.{y}"
+    # Unbekanntes Format: lieber leer lassen als crashen (manuell nachtragen).
+    return None
+
+
 DateCH = Annotated[
     str,
     Field(
@@ -15,6 +46,11 @@ DateCH = Annotated[
         examples=["22.10.2024"],
     ),
 ]
+
+# Optionales CH-Datum: normalisiert gängige Formate (ISO, dd/mm/yyyy) vor der
+# Validierung auf 'dd.mm.yyyy'; unbekannte Werte werden zu None. Der Validator
+# sitzt auf der äusseren Optional-Ebene, damit None korrekt durchgereicht wird.
+DateCHOpt = Annotated[DateCH | None, BeforeValidator(_normalize_ch_date)]
 
 UnterbrancheCode = Literal[420, 360, 380]
 SpracheCode = Literal["D", "F", "I"]
@@ -35,25 +71,42 @@ class AkdBaseModel(BaseModel):
 
 class AkdPoliceRecord10(AkdBaseModel):
     recordart: Literal[10] = Field(10, alias="RECORDART", description="Recordart 10, Konstante.")
-    ges_nr: int = Field(
+    ges_nr: int | None = Field(
+        default=None,
         alias="GES_NR",
-        description="Gesellschaftsnummer des Vorversicherers gemäss Mitversicherungs-Austausch.",
+        description="Gesellschaftsnummer des Vorversicherers gemäss Mitversicherungs-Austausch; null falls nicht aufgedruckt.",
     )
-    unterbranche_cd: UnterbrancheCode = Field(
-        alias="UNTERBRANCHE_CD", description="Unterbranche: 420=KTG, 360=UVG-Z, 380=UVG/OUFL."
+    unterbranche_cd: UnterbrancheCode | None = Field(
+        default=None,
+        alias="UNTERBRANCHE_CD",
+        description="Unterbranche: 420=KTG, 360=UVG-Z, 380=UVG/OUFL; null falls nicht eindeutig.",
     )
     police_nr: str = Field(
         alias="POLICE_NR", description="Policennummer; zentrale ID zur Verknüpfung der Records."
     )
-    vnbez: str = Field(alias="VNBEZ", description="Versicherungsnehmer-Bezeichnung / Kundenname.")
-    strasse: str = Field(alias="STRASSE", description="Adresse Versicherungsnehmer: Strasse.")
-    hausnr: str = Field(alias="HAUSNR", description="Adresse Versicherungsnehmer: Hausnummer.")
-    plz: int = Field(alias="PLZ", description="Adresse Versicherungsnehmer: Postleitzahl.")
-    ort: str = Field(alias="ORT", description="Adresse Versicherungsnehmer: Ort.")
-    beginn: DateCH = Field(
-        alias="BEGINN", description="Ursprünglicher Beginn der Versicherung / früheste Police."
+    vnbez: str | None = Field(
+        default=None, alias="VNBEZ", description="Versicherungsnehmer-Bezeichnung / Kundenname."
     )
-    ende: DateCH = Field(alias="ENDE", description="Nächstmöglicher Kündigungstermin der Police.")
+    strasse: str | None = Field(
+        default=None, alias="STRASSE", description="Adresse Versicherungsnehmer: Strasse."
+    )
+    hausnr: str | None = Field(
+        default=None, alias="HAUSNR", description="Adresse Versicherungsnehmer: Hausnummer."
+    )
+    plz: int | None = Field(
+        default=None, alias="PLZ", description="Adresse Versicherungsnehmer: Postleitzahl."
+    )
+    ort: str | None = Field(
+        default=None, alias="ORT", description="Adresse Versicherungsnehmer: Ort."
+    )
+    beginn: DateCHOpt = Field(
+        default=None,
+        alias="BEGINN",
+        description="Ursprünglicher Beginn der Versicherung / früheste Police.",
+    )
+    ende: DateCHOpt = Field(
+        default=None, alias="ENDE", description="Nächstmöglicher Kündigungstermin der Police."
+    )
     risikonr: str | None = Field(
         default=None,
         alias="RISIKONR",
@@ -64,14 +117,20 @@ class AkdPoliceRecord10(AkdBaseModel):
         alias="BETRART_TEXT",
         description="Betriebsart in Textform gemäss Risikoklassifizierung UVG; bei KTG optional.",
     )
-    sprach_cd: SpracheCode = Field(
-        alias="SPRACH_CD", description="Korrespondenzsprache / Sprache der Auskunft: D, F oder I."
+    sprach_cd: SpracheCode | None = Field(
+        default=None,
+        alias="SPRACH_CD",
+        description="Korrespondenzsprache / Sprache der Auskunft: D, F oder I; null falls nicht sichtbar.",
     )
-    sicht_dt: DateCH = Field(
-        alias="SICHT_DT", description="Sichtdatum / Daten- und Abwicklungsstand der Auskunft."
+    sicht_dt: DateCHOpt = Field(
+        default=None,
+        alias="SICHT_DT",
+        description="Sichtdatum / Daten- und Abwicklungsstand der Auskunft.",
     )
-    kz_ereig_finanz: Bool01 = Field(
-        alias="KZ_EREIG_FINANZ", description="1=Ereignissicht, 0=Finanzsicht."
+    kz_ereig_finanz: Bool01 | None = Field(
+        default=None,
+        alias="KZ_EREIG_FINANZ",
+        description="1=Ereignissicht, 0=Finanzsicht; null falls nicht eindeutig bestimmbar.",
     )
     kz_obl: Bool01 | None = Field(
         default=None,
@@ -88,10 +147,12 @@ class AkdPoliceRecord10(AkdBaseModel):
         alias="LS_FRW",
         description="Nur UVG: versicherte Lohnsumme bei freiwilliger Versicherung; sonst leer/null.",
     )
-    gekuendigt: Bool01 = Field(
-        alias="GEKUENDIGT", description="1=Vertrag gekündigt, 0=nicht gekündigt."
+    gekuendigt: Bool01 | None = Field(
+        default=None,
+        alias="GEKUENDIGT",
+        description="1=Vertrag gekündigt, 0=nicht gekündigt; null falls nicht erkennbar.",
     )
-    gekuendigt_dt: DateCH | None = Field(
+    gekuendigt_dt: DateCHOpt = Field(
         default=None,
         alias="GEKUENDIGT_DT",
         description="Falls gekündigt: Wirkungsdatum der Kündigung; sonst leer/null.",
@@ -153,24 +214,29 @@ class AkdPoliceRecord10(AkdBaseModel):
     ]
 
 
-
 class AkdKreisRecord20(AkdBaseModel):
     recordart: Literal[20] = Field(20, alias="RECORDART", description="Recordart 20, Konstante.")
     police_nr: str = Field(
         alias="POLICE_NR", description="Policennummer zur Verknüpfung mit Recordart 10."
     )
-    krs_lfnr: int = Field(
+    krs_lfnr: int | None = Field(
+        default=None,
         alias="KRS_LFNR",
         ge=1,
         description="Laufnummer des Deckungskreises; innerhalb der Auskunft eindeutig.",
     )
-    kreisart_cd: Bool01 = Field(
-        alias="KREISART_CD", description="1=Einzelperson, 0=Personengruppe."
+    kreisart_cd: Bool01 | None = Field(
+        default=None,
+        alias="KREISART_CD",
+        description="1=Einzelperson, 0=Personengruppe; null falls nicht erkennbar.",
     )
-    kreis_txt: str = Field(
-        alias="KREIS_TXT", description="Bezeichnung des Personenkreises, ohne Personendaten."
+    kreis_txt: str | None = Field(
+        default=None,
+        alias="KREIS_TXT",
+        description="Bezeichnung des Personenkreises, ohne Personendaten.",
     )
-    jahr_max: int = Field(
+    jahr_max: int | None = Field(
+        default=None,
         alias="JAHR_MAX",
         description="Letztes Jahr, in dem der Deckungskreis unter der Police versichert war.",
     )
@@ -392,12 +458,15 @@ class AkdLohnsummenRecord30(AkdBaseModel):
     police_nr: str = Field(
         alias="POLICE_NR", description="Policennummer zur Verknüpfung mit Recordart 10."
     )
-    krs_lfnr: int = Field(
+    krs_lfnr: int | None = Field(
+        default=None,
         alias="KRS_LFNR",
         ge=1,
         description="Laufnummer des Deckungskreises zur Verknüpfung mit Recordart 20.",
     )
-    jahr: int = Field(alias="JAHR", description="Kalenderjahr der Deckungs-Gültigkeit.")
+    jahr: int | None = Field(
+        default=None, alias="JAHR", description="Kalenderjahr der Deckungs-Gültigkeit."
+    )
     ls_m: int | None = Field(
         default=None, alias="LS_M", description="KTG: Lohnsumme Männer, ganze CHF."
     )
@@ -458,18 +527,23 @@ class AkdSchadenRecord40(AkdBaseModel):
     police_nr: str = Field(
         alias="POLICE_NR", description="Policennummer zur Verknüpfung mit Recordart 10."
     )
-    jahr: int = Field(
-        alias="JAHR", description="Bei Ereignissicht Ereignisjahr, bei Finanzsicht Zahlungsjahr."
+    jahr: int | None = Field(
+        default=None,
+        alias="JAHR",
+        description="Bei Ereignissicht Ereignisjahr, bei Finanzsicht Zahlungsjahr.",
     )
     unfallart: UnfallartCode | None = Field(
         default=None,
         alias="UNFALLART",
         description="Nur UVG: 1=BU, 2=NBU, 3=Freiwillig; sonst leer/null.",
     )
-    anz_alle: int = Field(
-        alias="ANZ_ALLE", description="Anzahl Schäden total im betreffenden Jahr zum Sichtdatum."
+    anz_alle: int | None = Field(
+        default=None,
+        alias="ANZ_ALLE",
+        description="Anzahl Schäden total im betreffenden Jahr zum Sichtdatum.",
     )
-    anz_pendent: int = Field(
+    anz_pendent: int | None = Field(
+        default=None,
         alias="ANZ_PENDENT",
         description="Anzahl offener Schäden im betreffenden Jahr zum Sichtdatum.",
     )
@@ -517,14 +591,15 @@ class AkdLangzeitSchadenRecord50(AkdBaseModel):
         ge=1,
         description="Laufnummer des Schadens, chronologisch nach Ereignisdatum; bei STATUS=0 leer/null.",
     )
-    ereignis_dt: DateCH | None = Field(
+    ereignis_dt: DateCHOpt = Field(
         default=None,
         alias="EREIGNIS_DT",
         description="Ereignisdatum des Schadens; bei STATUS=0 leer/null.",
     )
-    status: LangzeitStatus = Field(
+    status: LangzeitStatus | None = Field(
+        default=None,
         alias="STATUS",
-        description="1=pendent/offen, 2=erledigt, 3=max. Leistungsdauer erreicht, 0=keine Langzeit-Schäden vorhanden.",
+        description="1=pendent/offen, 2=erledigt, 3=max. Leistungsdauer erreicht, 0=keine Langzeit-Schäden vorhanden; null falls nicht erkennbar.",
     )
     zahlung_tot: int | None = Field(
         default=None,
@@ -546,7 +621,6 @@ class AkdLangzeitSchadenRecord50(AkdBaseModel):
         "ZAHLUNG_TOT",
         "RUECK_TOTAL_BETR",
     ]
-
 
 
 class AkdStructuredOutput(AkdBaseModel):
@@ -616,21 +690,27 @@ _PROGRAMMATIC_FIELDS = {"VERSION"}
 
 def _make_strict(schema: dict[str, object]) -> None:
     """Make a JSON Schema strict-compatible: all properties required, no defaults."""
-    props = schema.get("properties", {})
-    if props:
+    props = schema.get("properties")
+    if isinstance(props, dict):
         schema["required"] = [k for k in props if k not in _PROGRAMMATIC_FIELDS]
         schema.setdefault("additionalProperties", False)
         for prop_def in props.values():
-            prop_def.pop("default", None)  # type: ignore[union-attr]
+            if isinstance(prop_def, dict):
+                prop_def.pop("default", None)
 
 
 def akd_json_schema() -> dict[str, object]:
     schema = AkdStructuredOutput.model_json_schema(by_alias=True)
-    for def_schema in schema.get("$defs", {}).values():  # type: ignore[union-attr]
-        props = def_schema.get("properties", {})
-        for field_name in _PROGRAMMATIC_FIELDS:
-            props.pop(field_name, None)
-        _make_strict(def_schema)
+    defs = schema.get("$defs")
+    if isinstance(defs, dict):
+        for def_schema in defs.values():
+            if not isinstance(def_schema, dict):
+                continue
+            props = def_schema.get("properties")
+            if isinstance(props, dict):
+                for field_name in _PROGRAMMATIC_FIELDS:
+                    props.pop(field_name, None)
+            _make_strict(def_schema)
     _make_strict(schema)
     return schema
 
