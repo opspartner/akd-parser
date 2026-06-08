@@ -219,9 +219,7 @@ async def _process_pdf(
     started = time.perf_counter()
 
     try:
-        images = load_images(
-            source_path, dpi=dpi, max_pages=max_pages, max_long_edge=max_long_edge
-        )
+        images = load_images(source_path, dpi=dpi, max_pages=max_pages, max_long_edge=max_long_edge)
         img_size = sum(len(img) for img in images)
         _stderr(
             f"{_BOLD}●{_RESET} {source_path.name}"
@@ -242,10 +240,7 @@ async def _process_pdf(
             _write_json(output_path, validated.model_dump(by_alias=True))
 
         elapsed = time.perf_counter() - started
-        _stderr(
-            f"  {_GREEN}✓{_RESET} {_format_duration(elapsed)}"
-            f"  ·  {counts_str}"
-        )
+        _stderr(f"  {_GREEN}✓{_RESET} {_format_duration(elapsed)}  ·  {counts_str}")
         _stderr(f"  → {output_path}")
 
         return _Result(
