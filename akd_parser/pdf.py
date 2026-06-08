@@ -16,9 +16,10 @@ def pdf_to_images(
     matrix = fitz.Matrix(zoom, zoom)
     doc = fitz.open(pdf_path)
     try:
-        pages = list(doc)  # pyre-ignore[6]
+        page_count = doc.page_count
         if max_pages is not None:
-            pages = pages[:max_pages]
+            page_count = min(page_count, max_pages)
+        pages = [doc[i] for i in range(page_count)]
         result: list[Image.Image] = []
         for page in pages:
             pix = page.get_pixmap(matrix=matrix)
@@ -36,7 +37,7 @@ def optimize_image(img: Image.Image, *, max_long_edge: int = 3072, jpeg_quality:
     if long_edge > max_long_edge:
         scale = max_long_edge / long_edge
         new_size = (int(img.width * scale), int(img.height * scale))
-        img = img.resize(new_size, Image.LANCZOS)  # pyre-ignore[16]
+        img = img.resize(new_size, Image.Resampling.LANCZOS)
 
     img = img.filter(ImageFilter.SHARPEN)
     img = ImageEnhance.Contrast(img).enhance(1.3)
